@@ -6,7 +6,7 @@ import time
 MIN_DETECTION_AREA = 5000
 THRESHOLD = 150
 BLUR_AMOUNT = 5
-RUN_NAME="screen"
+RUN_NAME="checkerboard"
 CAPTURE_INTERVAL = 60 # save a frame every 60 frames (roughly every 2 seconds at 30fps)
 CAPTURE=True
 
