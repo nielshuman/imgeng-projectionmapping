@@ -1,10 +1,17 @@
 import cv2
 import numpy as np
 from picamera2 import Picamera2
+import time
 
 MIN_DETECTION_AREA = 5000
-THRESHOLD = 180
+THRESHOLD = 150
 BLUR_AMOUNT = 5
+RUN_NAME="screen"
+CAPTURE_INTERVAL = 60 # save a frame every 60 frames (roughly every 2 seconds at 30fps)
+CAPTURE=True
+
+        #ideal projector angle?
+
 
 picam2 = Picamera2()
 picam2.configure(picam2.create_preview_configuration(
@@ -16,15 +23,26 @@ picam2.start()
 
 # Lock settings to reduce projector rainbow artifacts
 picam2.set_controls({
-    # "AwbEnable": False
+    "AwbEnable": False,
     "AeEnable": False,    
-    # "ExposureTime": 10000,   # try 10000–30000
-    # "AnalogueGain": 1.0
+    "ExposureTime": 13000,   # try 10000–30000
+    "AnalogueGain": 1.0
 })
 
-while True:
+framecount = 0
+# if directory exists, delete it and remake it
+import os
+import shutil
+if CAPTURE:
+    if os.path.exists(f"test_material/{RUN_NAME}"):
+        shutil.rmtree(f"test_material/{RUN_NAME}")
+    os.makedirs(f"test_material/{RUN_NAME}")
+
+
+while True: # means repeat forever
     frame = picam2.capture_array()
-    gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+    detection_frame = frame.copy() 
+    gray = cv2.cvtColor(detection_frame, cv2.COLOR_RGB2GRAY)
 
     # Blur - to smooth out shit
     blur = cv2.GaussianBlur(gray, (BLUR_AMOUNT, BLUR_AMOUNT), 0)
@@ -46,18 +64,23 @@ while True:
             peri = cv2.arcLength(largest, True)
             approx = cv2.approxPolyDP(largest, 0.02 * peri, True)
 
-            if len(approx) == 4: #only if we have a rectangle (well, vierhoek)
+            if len(approx) == 4: #only if we have a rectangle (well, vierhoek) quadrilateral!!!!
                 pts = approx.reshape(4, 2)
 
                 # Draw corners
                 for x, y in pts:
-                    cv2.circle(frame, (x, y), 8, (0, 255, 0), -1)
+                    cv2.circle(detection_frame, (x, y), 8, (0, 255, 0), -1)
 
-                cv2.polylines(frame, [approx], True, (255, 0, 0), 2)
+                cv2.polylines(detection_frame, [approx], True, (255, 0, 0), 2)
 
-    cv2.imshow("Projector Corner Detect", frame)
+    cv2.imshow("Projector Corner Detect", detection_frame)
     cv2.imshow("Blur", blur)
     cv2.imshow("Threshold", thresh)
+
+    framecount += 1
+    if framecount % CAPTURE_INTERVAL == 0 and CAPTURE:
+        cv2.imwrite(f"test_material/{RUN_NAME}/frame_{framecount}.jpg", frame)
+        print('Saved frame', framecount)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
