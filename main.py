@@ -39,8 +39,10 @@ while True:
     frame = picam2.capture_array()
     framecount += 1
 
-    cornerdetect(frame)
-    
+    r, detection_frame, thresh = cornerdetect(frame)
+    cv2.imshow("Projector Corner Detect", detection_frame)
+    cv2.imshow("Threshold", thresh)
+
     if CAPTURE and framecount % CAPTURE_INTERVAL == 0:
         cv2.imwrite(f"test_material/{RUN_NAME}/frame_{framecount}.jpg", frame)
         print('Saved frame', framecount)
