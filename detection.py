@@ -28,6 +28,8 @@ def cornerdetect(frame, blur_amount=BLUR_AMOUNT, threshold=THRESHOLD, min_detect
         cv2.CHAIN_APPROX_SIMPLE # compress segments to only their corner points
     )
 
+    pts = []
+    
     if contours:
         largest = max(contours, key=cv2.contourArea)
 
@@ -45,7 +47,6 @@ def cornerdetect(frame, blur_amount=BLUR_AMOUNT, threshold=THRESHOLD, min_detect
                     cv2.circle(detection_frame, (x, y), 8, (0, 255, 0), -1)
 
                 cv2.polylines(detection_frame, [approx], True, (255, 0, 0), 2)
-
     return pts, detection_frame, thresh
 
 def tune_parameters(frame):
@@ -84,5 +85,3 @@ def tune_parameters(frame):
     cv2.destroyAllWindows()
     print(f"Final values → BLUR_AMOUNT={blur_safe}, THRESHOLD={threshold}, MIN_DETECTION_AREA={area}")
     return blur_safe, threshold, area
-
-tune_parameters(cv2.imread("test_material/normal/frame_360.jpg"))
