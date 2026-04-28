@@ -102,7 +102,8 @@ for (x, y) in pts_on_original:
     cv2.drawMarker(canvas, (int(x), int(y)), (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=30, thickness=3, line_type=cv2.LINE_AA)
 for (x, y) in pts_on_photo:
     cv2.drawMarker(frame, (x, y), (255, 0, 0), markerType=cv2.MARKER_CROSS, markerSize=30, thickness=3, line_type=cv2.LINE_AA)
-
+cv2.imwrite("quantification_result.jpg", canvas)
+cv2.imwrite("quantification_photo.jpg", frame)
 # cv2.imshow("threshold", thresh)
 while True:
         cv2.imshow("photo", frame)
