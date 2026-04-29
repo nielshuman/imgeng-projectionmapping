@@ -3,10 +3,12 @@ import cv2
 import os
 import numpy as np
 
-# RUN_NAME = 'normal'
+RUN_NAME = 'normal'
 
 # for frame_filename in os.listdir(f'test_material/{RUN_NAME}/'):
-#     cornerdetect(cv2.imread(f"test_material/{RUN_NAME}/{frame_filename}"))
+#     corners, vis, thresh = cornerdetect(cv2.imread(f"test_material/{RUN_NAME}/{frame_filename}"))
+#     cv2.imshow("corners", vis)
+#     cv2.imshow("threshold", thresh)
 #     cv2.waitKey(0)
   
 def pick_points(frame, line=True):
