@@ -1,5 +1,5 @@
 """
-Raspberry Pi projector calibration + click-to-project
+projector_sketch.py — Raspberry Pi projector calibration + click-to-project
 
 Setup:
   - Projector connected to Pi → runs the arcade fullscreen window
@@ -36,6 +36,7 @@ WHITE_SETTLE_TIME = 2.0   # seconds to show white before detecting
 shared = {
     "state":      "white",   # white | detect | live
     "H":          None,      # homography matrix, set once corners found
+    "corners":    [],        # calibration corners in camera space, for debug display
     "marker":     None,      # (proj_x, proj_y) in projector pixel space
     "cam_marker": None,      # (cam_x, cam_y) — the raw click point for debug display
     "reset":      False,     # set True from OpenCV thread to trigger recalibration
@@ -125,6 +126,7 @@ def opencv_thread():
             with lock:
                 shared["state"]      = "white"
                 shared["H"]          = None
+                shared["corners"]    = []
                 shared["marker"]     = None
                 shared["cam_marker"] = None
                 shared["reset"]      = False
@@ -147,8 +149,9 @@ def opencv_thread():
             if len(corners) == 4:
                 H = build_homography(corners)
                 with lock:
-                    shared["H"]     = H
-                    shared["state"] = "live"
+                    shared["H"]       = H
+                    shared["corners"] = corners.tolist() if hasattr(corners, "tolist") else list(corners)
+                    shared["state"]   = "live"
                 print("[calibration] corners found, homography computed")
             else:
                 cv2.putText(vis, "Detecting corners...", (10, 30),
@@ -160,8 +163,9 @@ def opencv_thread():
                 marker = shared["marker"]
                 H      = shared["H"]
 
-            # Draw the 4 calibration corners for reference
-            corners_disp, _, _ = cornerdetect(frame)
+            # Draw the calibration corners (stored at calibration time, no re-detection needed)
+            with lock:
+                corners_disp = shared["corners"]
             for c in corners_disp:
                 cv2.drawMarker(vis, (int(c[0]), int(c[1])),
                                (0, 255, 0), cv2.MARKER_CROSS, 12, 2)
