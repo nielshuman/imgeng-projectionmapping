@@ -1,5 +1,5 @@
 """
-projector_sketch.py — Raspberry Pi projector calibration + click-to-project
+Raspberry Pi projector calibration + click-to-project
 
 Setup:
   - Projector connected to Pi → runs the arcade fullscreen window
@@ -113,8 +113,7 @@ def opencv_thread():
     cv2.setMouseCallback("Debug - camera", mouse_callback)
 
     while True:
-        rgb = cam.capture_array()
-        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        frame = cam.capture_array()
 
         with lock:
             state = shared["state"]
@@ -134,7 +133,7 @@ def opencv_thread():
         # ── State machine ────────────────────────────────────────────────
         if state == "white":
             elapsed = (cv2.getTickCount() - white_start) / freq
-            vis = bgr.copy()
+            vis = frame.copy()
             cv2.putText(vis, f"Projecting white... ({elapsed:.1f}s)", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             if elapsed >= WHITE_SETTLE_TIME:
@@ -142,7 +141,7 @@ def opencv_thread():
                     shared["state"] = "detect"
 
         elif state == "detect":
-            corners, vis, thresh = cornerdetect(bgr)
+            corners, vis, thresh = cornerdetect(frame)
             cv2.imshow("Debug - threshold", thresh)
 
             if len(corners) == 4:
@@ -156,13 +155,13 @@ def opencv_thread():
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 100, 255), 2)
 
         elif state == "live":
-            vis = bgr.copy()
+            vis = frame.copy()
             with lock:
                 marker = shared["marker"]
                 H      = shared["H"]
 
             # Draw the 4 calibration corners for reference
-            corners_disp, _, _ = cornerdetect(bgr)
+            corners_disp, _, _ = cornerdetect(frame)
             for c in corners_disp:
                 cv2.drawMarker(vis, (int(c[0]), int(c[1])),
                                (0, 255, 0), cv2.MARKER_CROSS, 12, 2)
