@@ -1,4 +1,4 @@
-from detection import cornerdetect, MIN_DETECTION_AREA, THRESHOLD, BLUR_AMOUNT
+from src.detection import cornerdetect, MIN_DETECTION_AREA, THRESHOLD, BLUR_AMOUNT
 import cv2
 import os
 import numpy as np

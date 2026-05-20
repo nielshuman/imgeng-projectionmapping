@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Projector</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.4rem;
+      pointer-events: none;
+      font-family: 'Courier New', monospace;
+    }
+
+    #status-label {
+      font-size: clamp(1rem, 3vw, 1.6rem);
+      letter-spacing: .25em;
+      text-transform: uppercase;
+      color: #fff;
+      opacity: 0.85;
+    }
+
+    #spinner {
+      width: 48px; height: 48px;
+      border: 3px solid rgba(255,255,255,.15);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #status-label.hidden, #spinner.hidden { display: none; }
+  </style>
+</head>
+<body>
+
+<div id="overlay">
+  <div id="spinner"></div>
+  <div id="status-label">Connecting…</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.3/p5.min.js"></script>
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let appState  = "connecting";   // connecting | white | detect | live
+let markerX   = null;
+let markerY   = null;
+
+// ── p5 sketch ────────────────────────────────────────────────────────────────
+new p5(function(p) {
+
+  p.setup = function() {
+    p.createCanvas(p.windowWidth, p.windowHeight).parent(document.body);
+    p.noStroke();
+  };
+
+  p.windowResized = function() {
+    p.resizeCanvas(p.windowWidth, p.windowHeight);
+  };
+
+  p.draw = function() {
+    if (appState === "white" || appState === "detect") {
+      // Solid white for camera calibration
+      p.background(255);
+      return;
+    }
+
+    if (appState === "live") {
+      p.background(0);
+      if (markerX !== null && markerY !== null) {
+        drawMarker(markerX, markerY);
+      }
+      return;
+    }
+
+    // connecting / unknown
+    p.background(0);
+  };
+
+  function drawMarker(px, py) {
+    // Map from projector-space (1280×720) to canvas pixels
+    const cx = (px / 1280) * p.width;
+    const cy = (py / 720)  * p.height;
+    const r  = 28;
+    const w  = 3.5;
+
+    // Outer circle
+    p.noFill();
+    p.stroke(255, 30, 30);
+    p.strokeWeight(w);
+    p.circle(cx, cy, r * 2);
+
+    // Cross-hair lines — extend a bit beyond the circle
+    const ext = r * 1.55;
+    p.line(cx - ext, cy, cx + ext, cy);
+    p.line(cx, cy - ext, cx, cy + ext);
+
+    // Soft glow ring
+    p.noStroke();
+    p.fill(255, 30, 30, 35);
+    p.circle(cx, cy, r * 3.5);
+  }
+
+});
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+const label   = document.getElementById("status-label");
+const spinner = document.getElementById("spinner");
+
+function setStatus(text, showSpinner) {
+  label.textContent   = text;
+  label.className     = "";
+  spinner.className   = showSpinner ? "" : "hidden";
+}
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws    = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = function() {
+    setStatus("Waiting for calibration…", true);
+  };
+
+  ws.onmessage = function(evt) {
+    const msg = JSON.parse(evt.data);
+
+    if (msg.type === "state") {
+      appState = msg.state;
+
+      if (msg.state === "white") {
+        markerX = null; markerY = null;
+        setStatus("Calibrating — projecting white", true);
+      } else if (msg.state === "detect") {
+        setStatus("Detecting corners…", true);
+      } else if (msg.state === "live") {
+        // Hide overlay completely once live
+        label.className   = "hidden";
+        spinner.className = "hidden";
+      }
+    }
+
+    if (msg.type === "marker") {
+      markerX = msg.x;
+      markerY = msg.y;
+    }
+
+    if (msg.type === "quit") {
+      setStatus("Session ended", false);
+      appState = "connecting";
+    }
+  };
+
+  ws.onclose = function() {
+    appState = "connecting";
+    setStatus("Reconnecting…", true);
+    setTimeout(connect, 2000);
+  };
+
+  ws.onerror = function() {
+    ws.close();
+  };
+}
+
+connect();
+</script>
+</body>
+</html>
