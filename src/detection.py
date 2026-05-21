@@ -89,54 +89,61 @@ def tune_parameters(frame):
 
 
 def laserdetect(frame):
-    # Blur slightly to reduce noise
-    blurred = cv2.GaussianBlur(frame, (5, 5), 0)
+        # Slight blur reduces sensor noise
+    blurred = cv2.GaussianBlur(frame, (3, 3), 0)
 
-    # Convert to HSV
-    hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+    # Convert to grayscale
+    gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
 
-    # Red wraps around HSV hue range, so use two masks
-    lower_red1 = np.array([0, 120, 200])
-    upper_red1 = np.array([10, 255, 255])
+    # Threshold VERY bright pixels
+    _, thresh = cv2.threshold(gray, 245, 255, cv2.THRESH_BINARY)
 
-    lower_red2 = np.array([170, 120, 200])
-    upper_red2 = np.array([180, 255, 255])
-
-    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-
-    mask = mask1 + mask2
-
-    # Remove small noise
+    # Remove tiny noise
     kernel = np.ones((3, 3), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
 
-    # Find contours
+    # Find contours/blobs
     contours, _ = cv2.findContours(
-        mask,
+        thresh,
         cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_SIMPLE
     )
 
-    if contours:
-        # Largest contour
-        c = max(contours, key=cv2.contourArea)
+    best_center = None
+    best_brightness = 0
 
+    for c in contours:
         area = cv2.contourArea(c)
 
-        # Ignore tiny noise
-        if area > 5:
-            (x, y), radius = cv2.minEnclosingCircle(c)
+        # Laser spots are tiny
+        if 1 < area < 100:
 
-            center = (int(x), int(y))
+            # Bounding box
+            x, y, w, h = cv2.boundingRect(c)
 
-            # Draw detection
-            cv2.circle(frame, center, int(radius), (0, 255, 0), 2)
-            cv2.circle(frame, center, 3, (255, 0, 0), -1)
+            # Mean brightness inside blob
+            roi = gray[y:y+h, x:x+w]
+            brightness = np.mean(roi)
 
-            print("Laser detected at:", center)
+            if brightness > best_brightness:
+                best_brightness = brightness
 
-    cv2.imshow("Laser Detection", frame)
-    cv2.imshow("Mask", mask)
+                M = cv2.moments(c)
+
+                if M["m00"] != 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+
+                    best_center = (cx, cy)
+
+    # Draw best candidate
+    if best_center:
+        cv2.circle(frame, best_center, 10, (0, 255, 0), 2)
+        cv2.circle(frame, best_center, 3, (0, 0, 255), -1)
+
+        print("Laser:", best_center)
+
+    cv2.imshow("frame", frame)
+    cv2.imshow("threshold", thresh)
 
     key = cv2.waitKey(1)
