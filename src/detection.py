@@ -88,62 +88,112 @@ def tune_parameters(frame):
     return blur_safe, threshold, area
 
 
+# ---------- CREATE BLOB DETECTOR ----------
+params = cv2.SimpleBlobDetector_Params()
+
+# Detect bright blobs
+params.filterByColor = True
+params.blobColor = 255
+
+# Area filtering
+params.filterByArea = True
+params.minArea = 20
+params.maxArea = 2000
+
+# These help laser stability
+params.filterByCircularity = False
+params.filterByConvexity = False
+params.filterByInertia = False
+
+# More sensitivity
+params.minThreshold = 0
+params.maxThreshold = 255
+params.thresholdStep = 5
+
+detector = cv2.SimpleBlobDetector_create(params)
+
+
 def laserdetect(frame):
-        # Slight blur reduces sensor noise
+
+    # ---------- PREPROCESS ----------
     blurred = cv2.GaussianBlur(frame, (3, 3), 0)
 
-    # Convert to grayscale
-    gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
-    # Threshold VERY bright pixels
-    _, thresh = cv2.threshold(gray, 245, 255, cv2.THRESH_BINARY)
+    # ---------- RED MASK ----------
+    lower_red1 = np.array([0, 50, 50])
+    upper_red1 = np.array([10, 255, 255])
 
-    # Remove tiny noise
-    kernel = np.ones((3, 3), np.uint8)
-    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+    lower_red2 = np.array([170, 50, 50])
+    upper_red2 = np.array([180, 255, 255])
 
-    # Find contours/blobs
-    contours, _ = cv2.findContours(
+    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+
+    thresh = cv2.bitwise_or(mask1, mask2)
+
+    # ---------- CLEANUP ----------
+    kernel = np.ones((5, 5), np.uint8)
+
+    # Make blob more solid
+    thresh = cv2.dilate(thresh, kernel, iterations=2)
+
+    thresh = cv2.morphologyEx(
         thresh,
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
+        cv2.MORPH_CLOSE,
+        kernel
     )
 
-    best_center = None
-    best_brightness = 0
+    thresh = cv2.GaussianBlur(thresh, (5, 5), 0)
 
-    for c in contours:
-        area = cv2.contourArea(c)
+    _, thresh = cv2.threshold(
+        thresh,
+        127,
+        255,
+        cv2.THRESH_BINARY
+    )
 
-        # Laser spots are tiny
-        if 1 < area < 100:
+    # ---------- BLOB DETECTION ----------
+    keypoints = detector.detect(thresh)
 
-            # Bounding box
-            x, y, w, h = cv2.boundingRect(c)
+    best_point = None
+    best_size = 0
 
-            # Mean brightness inside blob
-            roi = gray[y:y+h, x:x+w]
-            brightness = np.mean(roi)
+    for kp in keypoints:
 
-            if brightness > best_brightness:
-                best_brightness = brightness
+        x = int(kp.pt[0])
+        y = int(kp.pt[1])
 
-                M = cv2.moments(c)
+        size = kp.size
 
-                if M["m00"] != 0:
-                    cx = int(M["m10"] / M["m00"])
-                    cy = int(M["m01"] / M["m00"])
+        # Pick largest / strongest blob
+        if size > best_size:
+            best_size = size
+            best_point = (x, y)
 
-                    best_center = (cx, cy)
+    # ---------- DRAW ----------
+    if best_point:
 
-    # Draw best candidate
-    if best_center:
-        cv2.circle(frame, best_center, 10, (0, 255, 0), 2)
-        cv2.circle(frame, best_center, 3, (0, 0, 255), -1)
+        cv2.circle(
+            frame,
+            best_point,
+            int(best_size),
+            (0, 255, 0),
+            2
+        )
 
-        print("Laser:", best_center)
+        cv2.circle(
+            frame,
+            best_point,
+            4,
+            (0, 0, 255),
+            -1
+        )
 
-    cv2.imshow("frame", frame)
+        print("Laser:", best_point)
+
+    # ---------- DEBUG ----------
     cv2.imshow("threshold", thresh)
+    cv2.imshow("frame", frame)
 
-    key = cv2.waitKey(1)
+    cv2.waitKey(1)

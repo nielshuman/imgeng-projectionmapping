@@ -17,8 +17,8 @@ picam2.start()
 picam2.set_controls({
     "AwbEnable": False,
     "AeEnable": False,
-    "ExposureTime": 13000,   # try 10000–30000
-    "AnalogueGain": 1.0
+    "ExposureTime": 15000,   # try 10000–30000
+    "AnalogueGain": 0.7
 })
 
 while True:

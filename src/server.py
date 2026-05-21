@@ -43,7 +43,7 @@ PROJ_W, PROJ_H = 1280, 720
 CAM_W,  CAM_H  = 640,  480
 
 WHITE_SETTLE_TIME = 2.0   # seconds
-MODE="face" # marker | face | laser
+MODE="marker" # marker | face | laser
 
 # ── Shared state ─────────────────────────────────────────────────────────────
 shared = {
