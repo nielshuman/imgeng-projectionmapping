@@ -3,20 +3,38 @@
 <head>
   <meta charset="UTF-8" />
   <title>Projector</title>
+
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-    canvas { display: block; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+
+    canvas {
+      display: block;
+    }
 
     #overlay {
       position: fixed;
       inset: 0;
+
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+
       gap: 1.4rem;
+
       pointer-events: none;
+
       font-family: 'Courier New', monospace;
     }
 
@@ -29,17 +47,29 @@
     }
 
     #spinner {
-      width: 48px; height: 48px;
+      width: 48px;
+      height: 48px;
+
       border: 3px solid rgba(255,255,255,.15);
       border-top-color: #fff;
       border-radius: 50%;
+
       animation: spin .9s linear infinite;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
-    #status-label.hidden, #spinner.hidden { display: none; }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #status-label.hidden,
+    #spinner.hidden {
+      display: none;
+    }
   </style>
 </head>
+
 <body>
 
 <div id="overlay">
@@ -48,128 +78,290 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.3/p5.min.js"></script>
+
 <script>
+// ── Constants ────────────────────────────────────────────────────────────────
+const SOURCE_WIDTH  = 1280;
+const SOURCE_HEIGHT = 720;
+
+const PEN_LIFT_TIMEOUT = 200; // ms
+const MAX_STROKES = 100;
+const MAX_POINTS_PER_STROKE = 300;
+
 // ── State ────────────────────────────────────────────────────────────────────
-let appState  = "connecting";   // connecting | white | detect | live
-let markerX   = null;
-let markerY   = null;
+let appState = "connecting";
+
+let markerX = null;
+let markerY = null;
+
+let laserStrokes = [];
+let currentStroke = null;
+
+let lastLaserTime = 0;
+
+let liveStartTime = null;
+let ignoreLaserUntil = 0;
+
+// ── UI ───────────────────────────────────────────────────────────────────────
+const label   = document.getElementById("status-label");
+const spinner = document.getElementById("spinner");
+
+function setStatus(text, showSpinner) {
+  label.textContent = text;
+  label.className = "";
+  spinner.className = showSpinner ? "" : "hidden";
+}
+
+function clearLaserData() {
+  laserStrokes.length = 0;
+  currentStroke = null;
+}
 
 // ── p5 sketch ────────────────────────────────────────────────────────────────
 new p5(function(p) {
 
   p.setup = function() {
     p.createCanvas(p.windowWidth, p.windowHeight).parent(document.body);
-    p.noStroke();
+
+    p.noFill();
+    p.strokeJoin(p.ROUND);
+    p.strokeCap(p.ROUND);
+
+    p.background(0);
   };
 
   p.windowResized = function() {
     p.resizeCanvas(p.windowWidth, p.windowHeight);
+
+    // hard redraw after resize
+    if (appState === "white" || appState === "detect") {
+      p.background(255);
+    } else {
+      p.background(0);
+    }
   };
 
   p.draw = function() {
+
+    // ── Calibration screens ────────────────────────────────────────────────
     if (appState === "white" || appState === "detect") {
-      // Solid white for camera calibration
       p.background(255);
       return;
     }
 
+    // ── Live mode ──────────────────────────────────────────────────────────
     if (appState === "live") {
+
+      // hard clear every frame (NO fade effect)
       p.background(0);
+
+      // Draw laser strokes
+      p.stroke(0, 150, 255);
+      p.strokeWeight(3);
+      p.noFill();
+
+      for (let i = 0; i < laserStrokes.length; i++) {
+
+        const stroke = laserStrokes[i];
+
+        if (stroke.length < 2) continue;
+
+        p.beginShape();
+
+        for (let j = 0; j < stroke.length; j++) {
+
+          const pt = stroke[j];
+
+          p.vertex(
+            (pt.x / SOURCE_WIDTH)  * p.width,
+            (pt.y / SOURCE_HEIGHT) * p.height
+          );
+        }
+
+        p.endShape();
+      }
+
+      // Draw marker
       if (markerX !== null && markerY !== null) {
         drawMarker(markerX, markerY);
       }
+
       return;
     }
 
-    // connecting / unknown
+    // ── Fallback ───────────────────────────────────────────────────────────
     p.background(0);
   };
 
+  // ── Marker ────────────────────────────────────────────────────────────────
   function drawMarker(px, py) {
-    // Map from projector-space (1280×720) to canvas pixels
-    const cx = (px / 1280) * p.width;
-    const cy = (py / 720)  * p.height;
-    const r  = 28;
-    const w  = 3.5;
 
-    // Outer circle
+    const cx = (px / SOURCE_WIDTH)  * p.width;
+    const cy = (py / SOURCE_HEIGHT) * p.height;
+
+    const r = 28;
+    const ext = r * 1.55;
+
     p.noFill();
     p.stroke(255, 30, 30);
-    p.strokeWeight(w);
+    p.strokeWeight(3.5);
+
     p.circle(cx, cy, r * 2);
 
-    // Cross-hair lines — extend a bit beyond the circle
-    const ext = r * 1.55;
     p.line(cx - ext, cy, cx + ext, cy);
     p.line(cx, cy - ext, cx, cy + ext);
 
-    // Soft glow ring
     p.noStroke();
     p.fill(255, 30, 30, 35);
+
     p.circle(cx, cy, r * 3.5);
   }
 
 });
 
-// ── WebSocket ─────────────────────────────────────────────────────────────────
-const label   = document.getElementById("status-label");
-const spinner = document.getElementById("spinner");
-
-function setStatus(text, showSpinner) {
-  label.textContent   = text;
-  label.className     = "";
-  spinner.className   = showSpinner ? "" : "hidden";
-}
-
+// ── WebSocket ────────────────────────────────────────────────────────────────
 function connect() {
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws    = new WebSocket(`${proto}://${location.host}/ws`);
 
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  window.projectorSocket = ws;
+
+  // ── Open ────────────────────────────────────────────────────────────────
   ws.onopen = function() {
     setStatus("Waiting for calibration…", true);
   };
 
+  // ── Messages ────────────────────────────────────────────────────────────
   ws.onmessage = function(evt) {
+
     const msg = JSON.parse(evt.data);
 
+    // ── State updates ─────────────────────────────────────────────────────
     if (msg.type === "state") {
+
       appState = msg.state;
 
       if (msg.state === "white") {
-        markerX = null; markerY = null;
+
+        markerX = null;
+        markerY = null;
+
+        clearLaserData();
+
         setStatus("Calibrating — projecting white", true);
-      } else if (msg.state === "detect") {
+      }
+
+      else if (msg.state === "detect") {
+
+        clearLaserData();
+
         setStatus("Detecting corners…", true);
-      } else if (msg.state === "live") {
-        // Hide overlay completely once live
-        label.className   = "hidden";
+      }
+
+      else if (msg.state === "live") {
+
+        label.className = "hidden";
         spinner.className = "hidden";
+
+        liveStartTime = performance.now();
+        ignoreLaserUntil = liveStartTime + 500; // 0.5s buffer
       }
     }
 
-    if (msg.type === "marker") {
+    // ── Marker ────────────────────────────────────────────────────────────
+    else if (msg.type === "marker") {
+
       markerX = msg.x;
       markerY = msg.y;
     }
 
-    if (msg.type === "quit") {
-      setStatus("Session ended", false);
+    // ── Laser points ──────────────────────────────────────────────────────
+    else if (msg.type === "laser") {
+
+      const now = performance.now();
+
+      if (now < ignoreLaserUntil) return;
+
+      // Start new stroke after timeout
+      if (
+        currentStroke === null ||
+        (now - lastLaserTime) > PEN_LIFT_TIMEOUT
+      ) {
+
+        currentStroke = [];
+        laserStrokes.push(currentStroke);
+
+        // Efficient bounded memory
+        if (laserStrokes.length > MAX_STROKES) {
+          laserStrokes.shift();
+        }
+      }
+
+      currentStroke.push({
+        x: msg.x,
+        y: msg.y
+      });
+
+      // Bound stroke size
+      if (currentStroke.length > MAX_POINTS_PER_STROKE) {
+        currentStroke.shift();
+      }
+
+      lastLaserTime = now;
+    }
+
+    // ── Quit ──────────────────────────────────────────────────────────────
+    else if (msg.type === "quit") {
+
       appState = "connecting";
+
+      clearLaserData();
+
+      setStatus("Session ended", false);
     }
   };
 
+  // ── Reconnect ───────────────────────────────────────────────────────────
   ws.onclose = function() {
+
     appState = "connecting";
+
     setStatus("Reconnecting…", true);
+
     setTimeout(connect, 2000);
   };
 
+  // ── Errors ──────────────────────────────────────────────────────────────
   ws.onerror = function() {
     ws.close();
   };
 }
 
+// ── Keyboard shortcuts ──────────────────────────────────────────────────────
+window.addEventListener("keydown", (e) => {
+
+  // Prevent repeat spam
+  if (e.repeat) return;
+
+  // R = recalibrate
+  if (e.key === "r" || e.key === "R") {
+
+    if (window.projectorSocket?.readyState === WebSocket.OPEN) {
+
+      window.projectorSocket.send(JSON.stringify({
+        type: "reset"
+      }));
+
+      setStatus("Recalibrating…", true);
+    }
+  }
+});
+
 connect();
+
 </script>
+
 </body>
 </html>

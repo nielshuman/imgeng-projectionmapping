@@ -190,10 +190,89 @@ def laserdetect(frame):
             -1
         )
 
-        print("Laser:", best_point)
-
+        # print("Laser:", best_point)
     # ---------- DEBUG ----------
-    cv2.imshow("threshold", thresh)
-    cv2.imshow("frame", frame)
+    # cv2.imshow("threshold", thresh)
+    # cv2.imshow("frame", frame)
+    return best_point, frame, thresh
+    cv2.waitKey(1)
+    
+
+def laserdetect_fast(frame, draw=True):
+
+    # Small blur only
+    blurred = cv2.GaussianBlur(frame, (3, 3), 0)
+
+    # ---------- HSV ----------
+    hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+
+    lower_red1 = np.array([0, 50, 50])
+    upper_red1 = np.array([10, 255, 255])
+
+    lower_red2 = np.array([170, 50, 50])
+    upper_red2 = np.array([180, 255, 255])
+
+    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+
+    thresh = cv2.bitwise_or(mask1, mask2)
+
+    # ---------- FAST CLEANUP ----------
+    kernel = np.ones((3, 3), np.uint8)
+
+    # One dilation is usually enough
+    thresh = cv2.dilate(thresh, kernel, iterations=1)
+
+    # ---------- CONTOURS ----------
+    contours, _ = cv2.findContours(
+        thresh,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    best_center = None
+    best_area = 0
+
+    for c in contours:
+
+        area = cv2.contourArea(c)
+
+        if 5 < area < 2000:
+
+            # Pick largest blob
+            if area > best_area:
+
+                best_area = area
+
+                # MUCH faster than moments
+                x, y, w, h = cv2.boundingRect(c)
+
+                cx = x + w // 2
+                cy = y + h // 2
+
+                best_center = (cx, cy)
+
+    # ---------- DRAW ----------
+    if best_center and draw:
+
+        cv2.circle(
+            frame,
+            best_center,
+            12,
+            (0, 255, 0),
+            2
+        )
+
+        cv2.circle(
+            frame,
+            best_center,
+            4,
+            (0, 0, 255),
+            -1
+        )
+
+        # print("Laser:", best_center)
+
+    return best_center, frame, thresh
 
     cv2.waitKey(1)

@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 from picamera2 import Picamera2
-from src.detection import laserdetect
+from src.detection import laserdetect, laserdetect_fast
 
 MIN_DETECTION_AREA = 5000
 THRESHOLD = 180
@@ -24,8 +24,13 @@ picam2.set_controls({
 while True:
     frame = picam2.capture_array()
 
-    laserdetect(frame)
+    point, vis, thresh = laserdetect_fast(frame)
     
-    # cv2.waitKey(1)
+    if point:
+        print("Laser:", point)
+        
+    cv2.imshow("vis", vis)
+    cv2.imshow("threshold", thresh)
+    cv2.waitKey(1)
 
 cv2.destroyAllWindows()
