@@ -108,7 +108,7 @@ def laserdetect(frame, color="red", min_area=5000, max_area=50000):
     Displays the annotated frame via cv2.imshow.
     """
     # Picamera2 RGB888 → OpenCV expects BGR for display, HSV conversion needs BGR
-    bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    bgr = frame.copy()
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
 
     ranges = LASER_COLORS[color]
