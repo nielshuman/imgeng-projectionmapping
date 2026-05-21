@@ -13,13 +13,11 @@ picam2.configure(picam2.create_preview_configuration(
 ))
 picam2.start()
 
-# cv2.waitKey(1000) # let camera settle/inir
-
 # Lock settings to reduce projector rainbow artifacts
 picam2.set_controls({
-    "AwbEnable": False
-    "AeEnable": False,    
-    "ExposureTime": 10000,   # try 10000–30000
+    "AwbEnable": False,
+    "AeEnable": False,
+    "ExposureTime": 13000,   # try 10000–30000
     "AnalogueGain": 1.0
 })
 
