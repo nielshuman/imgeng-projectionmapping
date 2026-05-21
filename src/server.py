@@ -43,7 +43,7 @@ PROJ_W, PROJ_H = 1280, 720
 CAM_W,  CAM_H  = 640,  480
 
 WHITE_SETTLE_TIME = 2.0   # seconds
-MODE="face" # marker | face
+MODE="face" # marker | face | laser
 
 # ── Shared state ─────────────────────────────────────────────────────────────
 shared = {
@@ -174,7 +174,8 @@ def opencv_thread():
 
         if state == "white":
             elapsed = time.monotonic() - white_start
-            vis = frame.copy()
+            corners, vis, thresh = cornerdetect(frame)
+            cv2.imshow("Debug - threshold", thresh)
             cv2.putText(vis, f"Projecting white... ({elapsed:.1f}s)",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             if elapsed >= WHITE_SETTLE_TIME:
@@ -224,6 +225,9 @@ def opencv_thread():
             vis = frame.copy()
             cv2.putText(vis, "Face tracking mode (not implemented)", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 100, 255), 2)
+            
+        elif state == "live" and MODE == "laser":
+            
 
         cv2.imshow("Debug - camera", vis)
 

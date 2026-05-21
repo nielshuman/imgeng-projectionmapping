@@ -85,3 +85,57 @@ def tune_parameters(frame):
     cv2.destroyAllWindows()
     print(f"Final values → BLUR_AMOUNT={blur_safe}, THRESHOLD={threshold}, MIN_DETECTION_AREA={area}")
     return blur_safe, threshold, area
+
+
+def laserdetect(frame):
+    # Blur slightly to reduce noise
+    blurred = cv2.GaussianBlur(frame, (5, 5), 0)
+
+    # Convert to HSV
+    hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+
+    # Red wraps around HSV hue range, so use two masks
+    lower_red1 = np.array([0, 120, 200])
+    upper_red1 = np.array([10, 255, 255])
+
+    lower_red2 = np.array([170, 120, 200])
+    upper_red2 = np.array([180, 255, 255])
+
+    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+
+    mask = mask1 + mask2
+
+    # Remove small noise
+    kernel = np.ones((3, 3), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+    # Find contours
+    contours, _ = cv2.findContours(
+        mask,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    if contours:
+        # Largest contour
+        c = max(contours, key=cv2.contourArea)
+
+        area = cv2.contourArea(c)
+
+        # Ignore tiny noise
+        if area > 5:
+            (x, y), radius = cv2.minEnclosingCircle(c)
+
+            center = (int(x), int(y))
+
+            # Draw detection
+            cv2.circle(frame, center, int(radius), (0, 255, 0), 2)
+            cv2.circle(frame, center, 3, (255, 0, 0), -1)
+
+            print("Laser detected at:", center)
+
+    cv2.imshow("Laser Detection", frame)
+    cv2.imshow("Mask", mask)
+
+    key = cv2.waitKey(1)

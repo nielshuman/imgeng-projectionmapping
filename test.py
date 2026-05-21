@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from picamera2 import Picamera2
+from src.detection import laserdetect
 
 MIN_DETECTION_AREA = 5000
 THRESHOLD = 180
@@ -22,14 +23,11 @@ picam2.set_controls({
     "AnalogueGain": 1.0
 })
 
-while True: # means repeat forever
+while True:
     frame = picam2.capture_array()
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-
-    cv2.imshow("Projector Corner Detect", frame)
-    cv2.imshow("gray", gray)
+    laserdetect(frame)
     
-    cv2.waitKey(1)
+    # cv2.waitKey(1)
 
 cv2.destroyAllWindows()
