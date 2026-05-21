@@ -87,60 +87,56 @@ def tune_parameters(frame):
     print(f"Final values → BLUR_AMOUNT={blur_safe}, THRESHOLD={threshold}, MIN_DETECTION_AREA={area}")
     return blur_safe, threshold, area
 
-# HSV ranges for common laser colors
-LASER_COLORS = {
-    "red": [
-        (np.array([0, 120, 200]),   np.array([10, 255, 255])),
-        (np.array([170, 120, 200]), np.array([180, 255, 255])),
-    ],
-    "green": [
-        (np.array([40, 100, 180]), np.array([80, 255, 255])),
-    ],
-    "blue": [
-        (np.array([100, 120, 180]), np.array([130, 255, 255])),
-    ],
-}
 
-def laserdetect(frame, color="red", min_area=5000, max_area=50000):
-    """
-    Detect a laser point in an RGB888 frame (from Picamera2).
-    Returns (x, y) centroid or None if not found.
-    Displays the annotated frame via cv2.imshow.
-    """
-    # Picamera2 RGB888 → OpenCV expects BGR for display, HSV conversion needs BGR
-    bgr = frame.copy()
-    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+def laserdetect(frame):
+    # Blur slightly to reduce noise
+    blurred = cv2.GaussianBlur(frame, (5, 5), 0)
 
-    ranges = LASER_COLORS[color]
-    mask = cv2.inRange(hsv, ranges[0][0], ranges[0][1])
-    for lo, hi in ranges[1:]:
-        mask |= cv2.inRange(hsv, lo, hi)
+    # Convert to HSV
+    hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
+    # Red wraps around HSV hue range, so use two masks
+    lower_red1 = np.array([0, 120, 200])
+    upper_red1 = np.array([10, 255, 255])
+
+    lower_red2 = np.array([170, 120, 200])
+    upper_red2 = np.array([180, 255, 255])
+
+    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+
+    mask = mask1 + mask2
+
+    # Remove small noise
     kernel = np.ones((3, 3), np.uint8)
-    mask = cv2.erode(mask, kernel, iterations=1)
-    mask = cv2.dilate(mask, kernel, iterations=2)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Find contours
+    contours, _ = cv2.findContours(
+        mask,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
 
-    point = None
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        if min_area < area < max_area:
-            M = cv2.moments(cnt)
-            if M["m00"] > 0:
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-                if point is None or area < point[2]:
-                    point = (cx, cy, area)
+    if contours:
+        # Largest contour
+        c = max(contours, key=cv2.contourArea)
 
-    if point:
-        x, y = point[0], point[1]
-        cv2.circle(bgr, (x, y), 10, (0, 255, 0), 2)
-        cv2.circle(bgr, (x, y), 2,  (0, 255, 0), -1)
-        cv2.putText(bgr, f"({x}, {y})", (x + 14, y - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        area = cv2.contourArea(c)
 
-    cv2.imshow("Laser detection", bgr)
-    cv2.waitKey(1)  # needed to actually render the imshow window
+        # Ignore tiny noise
+        if area > 5:
+            (x, y), radius = cv2.minEnclosingCircle(c)
 
-    return (point[0], point[1]) if point else None
+            center = (int(x), int(y))
+
+            # Draw detection
+            cv2.circle(frame, center, int(radius), (0, 255, 0), 2)
+            cv2.circle(frame, center, 3, (255, 0, 0), -1)
+
+            print("Laser detected at:", center)
+
+    cv2.imshow("Laser Detection", frame)
+    cv2.imshow("Mask", mask)
+
+    key = cv2.waitKey(1)
