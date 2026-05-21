@@ -227,7 +227,7 @@ def opencv_thread():
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 100, 255), 2)
             
         elif state == "live" and MODE == "laser":
-            
+            ...
 
         cv2.imshow("Debug - camera", vis)
 
