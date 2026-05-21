@@ -17,6 +17,10 @@ Keys (in OpenCV debug window):
   R — re-run calibration
   Q — quit server
 """
+import sys
+DEV = sys.argv[1] == "dev" if len(sys.argv) > 1 else False
+if DEV:
+    print("[mode] running in DEV mode with test image")
 
 import asyncio
 import json
@@ -28,7 +32,9 @@ import numpy as np
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
-# from picamera2 import Picamera2
+
+if not DEV:
+    from picamera2 import Picamera2
 
 from detection import cornerdetect
 
@@ -113,17 +119,18 @@ def cam_to_proj(H, cx, cy):
 
 # ── OpenCV thread ─────────────────────────────────────────────────────────────
 def opencv_thread():
-    # cam = Picamera2()
-    # cam.configure(cam.create_preview_configuration(
-    #     main={"size": (CAM_W, CAM_H), "format": "RGB888"}
-    # ))
-    # cam.start()
-    # cam.set_controls({
-    #     "AwbEnable":    False,
-    #     "AeEnable":     False,
-    #     "ExposureTime": 13000,
-    #     "AnalogueGain": 1.0,
-    # })
+    if not DEV:
+        cam = Picamera2()
+        cam.configure(cam.create_preview_configuration(
+            main={"size": (CAM_W, CAM_H), "format": "RGB888"}
+        ))
+        cam.start()
+        cam.set_controls({
+            "AwbEnable":    False,
+            "AeEnable":     False,
+            "ExposureTime": 13000,
+            "AnalogueGain": 1.0,
+        })
 
     white_start = time.monotonic()
 
@@ -148,8 +155,10 @@ def opencv_thread():
     cv2.setMouseCallback("Debug - camera", mouse_callback)
 
     while True:
-        # frame = cam.capture_array()
-        frame = cv2.imread("../test_material/normal/frame_360.jpg")
+        if DEV:
+            frame = cv2.imread("../test_material/normal/frame_360.jpg")
+        else:
+            frame = cam.capture_array()
         
         with lock:
             state = shared["state"]
@@ -226,7 +235,8 @@ def opencv_thread():
             with lock:
                 shared["reset"] = True
 
-    # cam.stop()
+    if not DEV:
+        cam.stop()
     cv2.destroyAllWindows()
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
