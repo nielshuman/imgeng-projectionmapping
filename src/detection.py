@@ -87,10 +87,6 @@ def tune_parameters(frame):
     print(f"Final values → BLUR_AMOUNT={blur_safe}, THRESHOLD={threshold}, MIN_DETECTION_AREA={area}")
     return blur_safe, threshold, area
 
-# src/detection.py
-import cv2
-import numpy as np
-
 # HSV ranges for common laser colors
 LASER_COLORS = {
     "red": [
