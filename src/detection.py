@@ -3,6 +3,7 @@ Detection script
 """
 
 import cv2
+import numpy as np
 
 # Define parameters at the top of the file or in a config section
 MIN_DETECTION_AREA = 5000
